@@ -11,11 +11,11 @@ separately; no task database, user configuration, or CLI implementation is bundl
 
 ### 1. Install the CLI
 
-Python 3.11 or later is required. This skill targets tasukura 0.1.7 or later.
+Python 3.11 or later is required. This skill targets tasukura 0.1.10 or later.
 
 ```bash
-uv tool install 'tasukura>=0.1.7'
-# Alternatively: pip install 'tasukura>=0.1.7'
+uv tool install 'tasukura>=0.1.10'
+# Alternatively: pip install 'tasukura>=0.1.10'
 tk --help
 ```
 
