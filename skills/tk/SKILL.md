@@ -13,8 +13,8 @@ model: `progress_logs` (raw timeseries) + typed `records` (extracted knowledge).
 
 ## Prerequisite
 
-Requires [tasukura](https://github.com/mixidota2/tasukura) 0.1.7 or later, installed
-separately with `uv tool install "tasukura>=0.1.7"` or `pip install "tasukura>=0.1.7"`.
+Requires [tasukura](https://github.com/mixidota2/tasukura) 0.1.10 or later, installed
+separately with `uv tool install "tasukura>=0.1.10"` or `pip install "tasukura>=0.1.10"`.
 Confirm `tk --help` works before operating on tasks. The skill does not bundle the CLI
 or a task database.
 
@@ -28,24 +28,25 @@ Always execute the `tk` command directly. `tk` is registered in PATH; do NOT use
 | Command | Description |
 |---------|-------------|
 | `tk add "Title" --description "..." [--source-id ID] [--source TYPE] [--parent ID] [--next-action "..."] [--top] [--after ID]` | Add a task (description required) |
-| `tk list [--status todo,in_progress] [--source TYPE] [--flat]` | List tasks (tree by default) |
+| `tk list [--status todo,in_progress] [--source TYPE] [--flat] [--all]` | List tasks (tree by default). Done tasks older than the retention window are hidden unless `--all` |
 | `tk update <id> [--title "..."] [--source-id ID] [--source TYPE]` | Update title or external source linkage. For `next_action` / `description`, use `tk log` |
 | `tk delete <id>` | Delete task (fails cleanly if records exist) |
 | `tk status <id> <new_status>` | Change status (todo/in_progress/in_review/done) |
 | `tk log <id> --summary "..." [--details "..."] [--remaining "..."] [--next-action "..."] [--description "..."]` | Record progress. `--next-action` updates task and is persisted as `next_action_set` on the log (history). `--description` updates task only |
 | `tk log-update <log_id> [--summary "..."] [--details "..."] [--remaining "..."]` | Edit a log (empty string clears) |
 | `tk log-delete <log_id>` | Delete a log (fails cleanly if a record references it) |
+| `tk logs [--since YYYY-MM-DD] [--limit N]` | List logs across all tasks, oldest first (most recent 50 by default; `--since` is local time unless a timezone is given) |
 | `tk record add <task_id> --kind <decision\|finding\|blocker\|question\|hypothesis> --log-id <log_id> --summary "..." [--details "..."] [--supersedes <record_id>]` | Add a typed record extracted from a log |
 | `tk record list <task_id> [--kind X] [--all]` | List records (active by default) |
 | `tk record show <record_id> [--with-log]` | Show record; `--with-log` dereferences source log |
 | `tk record update <record_id> [--summary "..."] [--details "..."]` | Typo / wording fix only |
-| `tk record resolve <blocker_id>` | Mark blocker resolved |
+| `tk record resolve <record_id>` | Mark a blocker or question resolved |
 | `tk record obsolete <id>` | Retire a record without replacement |
 | `tk record verify <id>` | Update `last_verified_at` (re-confirmed valid) |
 | `tk record delete <id>` | Permanently delete a mistaken record. For valid records, prefer `obsolete` |
-| `tk rank <id> [--after ID]` | Reorder |
-| `tk board [--status ...]` | Kanban view |
-| `tk show <id> [--full] [--kind X] [--logs N]` | Active context view |
+| `tk rank <id> [--after ID]` | Reorder among sibling tasks (top if no `--after`) |
+| `tk board [--status ...] [--all]` | Kanban view. Cards follow the tree order of `tk list` and show the parent title |
+| `tk show <id> [--full] [--kind X] [--logs N] [--brief]` | Active context view. `--brief` prints the task only |
 
 IDs accept prefix matches (12-char short IDs displayed).
 
@@ -138,7 +139,7 @@ add (--supersedes <old>)
   └─ Old record's status is auto-flipped to 'superseded'
 update (typo / wording fix only)
   └─ For semantic changes, always use 'add --supersedes' instead
-resolve (blocker only)
+resolve (blocker or question)
   └─ status=resolved, resolved_at=now
 obsolete (retire without replacement)
   └─ status=obsolete
@@ -174,7 +175,8 @@ Recent logs (5):
 - Warning = active set is growing. Clean up via `obsolete` / `supersede`.
 
 Options: `--full` (include inactive records and all logs), `--kind <X>` (filter), `--logs N`
-(change log count).
+(change log count), `--brief` (task definition, status, and next action only — use it when
+you only need to read or compare task definitions).
 
 ## Operation Flows
 
@@ -188,6 +190,13 @@ User intent → command mapping:
 - "Update next action" → `tk log <id> --summary "..." --next-action "..."` (history is preserved)
 - "Update description" → `tk log <id> --summary "..." --description "..."`
 - "Move X to the top" → `tk rank <id>`
+- "What did we do today / since X?" → `tk logs --since YYYY-MM-DD`
+
+#### How ordering works
+
+`tk rank` orders a task among its siblings. In both `tk list` and `tk board`, a child
+follows its parent, so raising a parent raises its whole subtree. To raise one child,
+rank it among its siblings; to raise the whole theme, rank the parent.
 
 #### When to use `in_review`
 
@@ -222,6 +231,7 @@ When to write without an explicit user instruction:
 | Investigation confirmed | ✅ process | ✅ `--kind finding` |
 | Blocker appears | ✅ situation | ✅ (if future reference is likely) `--kind blocker` |
 | Blocker resolved | ✅ resolution process | ✅ `tk record resolve <blocker_id>` |
+| Question answered | ✅ the answer and how it was reached | ✅ `tk record resolve <question_id>`. If the answer is itself a durable decision or finding, add that record with `--supersedes <question_id>` instead |
 | Failed attempt | ✅ | ❌ (attempts do not get promoted to records) |
 
 **Decision order**: always write the log first → ask "is this worth re-reading next session?"
